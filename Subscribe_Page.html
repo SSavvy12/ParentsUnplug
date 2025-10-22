@@ -33,13 +33,15 @@
       </p>
     </section>
 
-    <!-- Subscription Form -->
+    <!-- Subscription Form (Modified for Assignment) -->
     <section class="post-box">
       <h2>Join Our Newsletter</h2>
-      <form class="subscribe-form">
-        <input type="text" placeholder="Your Name" required>
-        <input type="email" placeholder="Your Email Address" required>
-        <button type="submit">Subscribe</button>
+      <form id="registration-form" class="subscribe-form" action="#" method="post">
+        <input type="text" id="username" name="username" placeholder="Your Username" required>
+        <input type="email" id="email" name="email" placeholder="Your Email Address" required>
+        <input type="password" id="password" name="password" placeholder="Password" required>
+        <input type="password" id="confirm-password" name="confirm-password" placeholder="Confirm Password" required>
+        <button type="submit">Join Now</button>
       </form>
     </section>
 
@@ -68,6 +70,10 @@
       <p>&copy; 2025 Parents Unplugged, All Rights Reserved.</p>
     </footer>
   </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
+
+
 
