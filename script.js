@@ -1,4 +1,5 @@
 document.addEventListener("DOMContentLoaded", function () {
+  // Registration Form
   const form = document.getElementById("registration-form");
   const usernameInput = document.getElementById("username");
   const emailInput = document.getElementById("email");
@@ -13,7 +14,7 @@ document.addEventListener("DOMContentLoaded", function () {
       errors.push("Username must be at least 3 characters long.");
     }
 
-    // Email validation (fixed regex)
+    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(emailInput.value)) {
       errors.push("Please enter a valid email address.");
@@ -30,13 +31,37 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     if (errors.length > 0) {
-      event.preventDefault(); // prevent form submission if errors
+      event.preventDefault();
       alert(errors.join("\n"));
     } else {
-      event.preventDefault(); // prevent form submission to control redirect timing
+      event.preventDefault();
       alert("Thank you for joining our newsletter!");
-      // Redirect to blog page
       window.location.href = "FinalBlogs.html";
+    }
+  });
+
+  // Login Form
+  const loginForm = document.getElementById("login-form");
+  const loginUsernameInput = document.getElementById("login-username");
+  const loginPasswordInput = document.getElementById("login-password");
+
+  // For demo purposes, hardcoded user credentials:
+  const validUser = {
+    username: "parentUser",
+    password: "parentPass123"
+  };
+
+  loginForm.addEventListener("submit", function(event) {
+    event.preventDefault();
+
+    const enteredUsername = loginUsernameInput.value.trim();
+    const enteredPassword = loginPasswordInput.value;
+
+    if (enteredUsername === validUser.username && enteredPassword === validUser.password) {
+      alert("Login successful! Redirecting to blog page...");
+      window.location.href = "FinalBlogs.html";
+    } else {
+      alert("Invalid username or password. Please try again.");
     }
   });
 });
