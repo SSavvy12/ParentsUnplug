@@ -29,12 +29,15 @@ document.addEventListener("DOMContentLoaded", function () {
       errors.push("Passwords do not match.");
     }
 
-    // Prevent submission and show alert if there are errors
     if (errors.length > 0) {
-      event.preventDefault();
+      event.preventDefault(); // prevent form submission if errors
       alert(errors.join("\n"));
     } else {
+      event.preventDefault(); // prevent form submission to control redirect timing
       alert("Thank you for joining our newsletter!");
+      // Redirect to blog page
+      window.location.href = "FinalBlogs.html";
     }
   });
 });
+
