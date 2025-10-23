@@ -277,3 +277,6 @@ footer {
     height: 200px;
   }
 }
+.post-box + .post-box {
+  margin-top: 30px;
+}
