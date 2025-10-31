@@ -271,12 +271,41 @@ footer {
     padding: 15px;
   }
 
-  /* Make photo-box smaller on mobile */
+  
   .photo-box {
     width: 100%;
     height: 200px;
   }
 }
+
 .post-box + .post-box {
   margin-top: 30px;
+}
+/* Make photo-box responsive (avoid fixed width) */
+.photo-box {
+  background-color: white;
+  padding: 10px;
+  width: 100%;
+  max-width: 300px;   /* limit size on wide screens */
+  aspect-ratio: 1 / 1; /* keeps square shape */
+  text-align: center;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* ensure images inside scale nicely */
+.photo-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+/* center footer within container and improve contrast */
+footer.contact-footer {
+  text-align: center;
+  font-size: 13px;
+  color: #fff; /* if footer sits on purple bg */
+  padding-top: 10px;
 }
