@@ -1,77 +1,498 @@
-// script.js — safer version
-document.addEventListener("DOMContentLoaded", function () {
-  // ---------- Registration / Subscribe Form ----------
-  const form = document.getElementById("registration-form");
-  if (form) {
-    const usernameInput = document.getElementById("username");
-    const emailInput = document.getElementById("email");
-    const passwordInput = document.getElementById("password");
-    const confirmPasswordInput = document.getElementById("confirm-password");
+// script.js — feed + comments preview + reviews + poll + registration (localStorage)
+document.addEventListener("DOMContentLoaded", () => {
+  const $ = s => document.querySelector(s);
+  const $$ = s => Array.from(document.querySelectorAll(s));
 
-    form.addEventListener("submit", function (event) {
-      event.preventDefault(); // prevent so we can validate
+  /* ---------------- Quote of the Day ---------------- */
+  const quotes = [
+    "Parenting is a journey, not a destination. — Unknown",
+    "There is no such thing as a perfect parent. — Unknown",
+    "The days are long, but the years are short. — Gretchen Rubin",
+    "One of the greatest titles in the world is parent. — Unknown",
+    "You are doing a great job. — Parents Unplugged"
+  ];
+  const qEl = $("#quote-of-day");
+  if (qEl) {
+    const dayIndex = Math.floor(Date.now() / (1000 * 60 * 60 * 24)) % quotes.length;
+    qEl.textContent = quotes[dayIndex];
+  }
 
-      const errors = [];
+  /* ---------------- Storage keys and helpers ---------------- */
+  const POSTS_KEY = "pu_posts_v1";
+  const REVIEWS_KEY = "pu_reviews_v1";
+  const COMMENTS_KEY = "pu_comments_v1";
+  const POLL_KEY = "pu_poll_v1";
 
-      // Username validation
-      if (!usernameInput || usernameInput.value.trim().length < 3) {
-        errors.push("Username must be at least 3 characters long.");
+  const defaultPoll = {
+    question: "What's your biggest parenting challenge this week?",
+    options: { sleep:0, feeding:0, behavior:0, balancing:0 },
+    total: 0
+  };
+
+  function getPosts(){ try{ return JSON.parse(localStorage.getItem(POSTS_KEY) || "[]"); }catch{return [];} }
+  function savePosts(arr){ localStorage.setItem(POSTS_KEY, JSON.stringify(arr)); renderAllPosts(); }
+
+  function getReviews(){ try{ return JSON.parse(localStorage.getItem(REVIEWS_KEY) || "[]"); }catch{return [];} }
+  function saveReviews(arr){ localStorage.setItem(REVIEWS_KEY, JSON.stringify(arr)); renderReviews(); }
+
+  function getAllComments(){ try{ return JSON.parse(localStorage.getItem(COMMENTS_KEY) || "{}"); }catch{return {}; } }
+  function saveAllComments(obj){ localStorage.setItem(COMMENTS_KEY, JSON.stringify(obj)); }
+
+  function getPoll(){ try{ return JSON.parse(localStorage.getItem(POLL_KEY) || JSON.stringify(defaultPoll)); }catch{return defaultPoll;} }
+  function savePoll(p){ localStorage.setItem(POLL_KEY, JSON.stringify(p)); renderPoll(); }
+
+  function escapeHtml(s){ if (!s) return ""; return String(s).replace(/[&<>"'`=\/]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'}[c])); }
+  function capital(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+  /* ---------------- Poll rendering ---------------- */
+  function renderPoll(){
+    const widget = $(".poll-widget");
+    if (!widget) return;
+    const poll = getPoll();
+    widget.innerHTML = `<h4>${escapeHtml(poll.question)}</h4>
+      <div>${Object.keys(poll.options).map(k=>{
+        const v = poll.options[k];
+        const pct = poll.total ? Math.round((v/poll.total)*100) : 0;
+        return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <label style="flex:0 0 auto"><input type="radio" name="pu_poll_choice" value="${k}"> ${escapeHtml(capital(k))}</label>
+          <div style="flex:1">
+            <div style="height:8px;background:#eee;border-radius:6px;overflow:hidden"><div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--accent),var(--primary));"></div></div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px">${v} vote(s) • ${pct}%</div>
+          </div>
+        </div>`;
+      }).join("")}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="vote-btn">Vote</button>
+        <button class="secondary reset-poll">Reset</button>
+      </div>
+      <div class="poll-feedback" style="margin-top:8px;font-size:13px;color:var(--muted)"></div>
+    `;
+    widget.querySelector(".vote-btn").addEventListener("click", ()=>{
+      const choice = widget.querySelector('input[name="pu_poll_choice"]:checked');
+      if (!choice){ widget.querySelector(".poll-feedback").textContent = "Please choose an option."; return; }
+      const p = getPoll(); p.options[choice.value] = (p.options[choice.value]||0)+1; p.total = (p.total||0)+1; savePoll(p);
+      widget.querySelector(".poll-feedback").textContent = "Thanks — your vote was counted.";
+    });
+    widget.querySelector(".reset-poll").addEventListener("click", ()=>{
+      if(!confirm("Reset poll (clears votes saved in this browser)?")) return;
+      localStorage.removeItem(POLL_KEY); renderPoll();
+    });
+  }
+
+  /* ---------------- Deletion helpers ---------------- */
+  function deletePost(id){
+    if (!confirm("Delete this post? This will remove the post and its comments permanently (in this browser).")) return;
+    const posts = getPosts().filter(p => String(p.id) !== String(id));
+    savePosts(posts);
+    // remove associated comments
+    const comments = getAllComments();
+    delete comments['post_'+id];
+    saveAllComments(comments);
+    // if user is on single post page for this id, redirect to feed
+    if (window.location.pathname.includes("post.html")) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("id") === String(id)) {
+        window.location.href = "FinalBlog.html";
+        return;
       }
+    }
+    renderAllPosts();
+  }
 
-      // Email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailInput || !emailRegex.test(emailInput.value.trim())) {
-        errors.push("Please enter a valid email address.");
-      }
+  function deleteReview(id){
+    if (!confirm("Delete this review? This will remove the review and its comments permanently (in this browser).")) return;
+    const reviews = getReviews().filter(r => String(r.id) !== String(id));
+    saveReviews(reviews);
+    // remove associated comments
+    const comments = getAllComments();
+    delete comments['review_'+id];
+    saveAllComments(comments);
+    renderReviews();
+  }
 
-      // Password validation
-      if (!passwordInput || passwordInput.value.length < 6) {
-        errors.push("Password must be at least 6 characters long.");
-      }
+  /* ---------------- Posts rendering (feed + latest) ---------------- */
+  function renderAllPosts(){
+    renderPostsGrid();   // for all .blog-grid instances
+    renderUserBlogsGrid(); // if present
+  }
 
-      // Confirm Password validation
-      if (!confirmPasswordInput || passwordInput.value !== confirmPasswordInput.value) {
-        errors.push("Passwords do not match.");
-      }
-
-      if (errors.length > 0) {
-        alert(errors.join("\n"));
+  // Renders all posts into any .blog-grid on the page.
+  function renderPostsGrid(){
+    const grids = document.querySelectorAll(".blog-grid");
+    if (!grids.length) return;
+    const posts = getPosts();
+    const comments = getAllComments();
+    grids.forEach(grid => {
+      if (!posts || posts.length === 0){
+        grid.innerHTML = `<div class="blog-post" style="text-align:center;padding:24px;">
+          <div style="font-weight:600;color:#222">Be the first to blog</div>
+          <p style="color:#555">Your post will appear here.</p>
+          <div><a href="FinalBlog.html"><button>Share a Story</button></a></div>
+        </div>`;
         return;
       }
 
-      // If validation passed, show success and redirect to blog page
-      alert("Thank you for joining our newsletter!");
-      // Ensure filename matches your blog page — change if you've chosen a different name
+      grid.innerHTML = posts.map(post => {
+        const time = new Date(post.time).toLocaleString();
+        const text = escapeHtml(post.text);
+        const thumb = post.imageDataUrl ? `<div class="thumb"><img src="${post.imageDataUrl}" alt=""></div>` : '';
+        // preview comments
+        const key = 'post_'+post.id;
+        const arr = (comments[key] || []);
+        const previewHtml = arr.slice(0,2).map(c => `<div class="comment-mini"><strong>${escapeHtml(c.name)}</strong> • ${new Date(c.time).toLocaleString()}<div style="margin-top:6px">${escapeHtml(c.text)}</div></div>`).join('');
+        const previewArea = previewHtml ? `<div class="comments-preview">${previewHtml}</div>` : `<div class="comments-preview" style="color:#666">No comments yet — be the first to reply.</div>`;
+        // show comment count
+        const count = arr.length;
+        return `<div class="blog-post" data-id="${post.id}">
+          <a href="post.html?id=${post.id}" style="text-decoration:none;color:inherit;">
+            ${thumb}
+            <div class="content">
+              <strong>${escapeHtml(post.name || 'Anonymous')}</strong>
+              <div class="meta">${time}</div>
+              <p style="margin-top:8px">${text.length > 260 ? text.slice(0,260)+'…' : text}</p>
+            </div>
+          </a>
+          ${previewArea}
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="toggle-post-comments" data-id="${post.id}">Show comments (${count})</button>
+            <a href="post.html?id=${post.id}" style="margin-left:auto"><button class="secondary" type="button">Open Post</button></a>
+            <button class="btn-delete" data-id="${post.id}" title="Delete post">Delete</button>
+          </div>
+          <div id="post-comments-${post.id}" class="post-comments" style="display:none"></div>
+        </div>`;
+      }).join("");
+    });
+
+    // attach toggles & delete handlers
+    attachPostHandlers();
+  }
+
+  // User Blogs grid (shows only posts by registered username)
+  function renderUserBlogsGrid(){
+    const grid = $("#user-blog-grid");
+    if (!grid) return;
+    const posts = getPosts();
+    const reg = getRegisteredUser();
+    if (!reg){ grid.innerHTML = `<div class="blog-post" style="text-align:center;padding:18px"><div style="font-weight:600">Log in to see your blogs</div><p style="color:#555">Register to post and view your posts.</p><div><a href="Subscribe_Page.html"><button>Register</button></a></div></div>`; return; }
+    const mine = posts.filter(p => p.name === reg.username);
+    if (mine.length === 0){ grid.innerHTML = `<div class="blog-post" style="text-align:center;padding:18px"><div style="font-weight:600">You haven't posted yet</div><p style="color:#555">Write your first story!</p><div><a href="FinalBlog.html"><button>Write a Story</button></a></div></div>`; return; }
+
+    const comments = getAllComments();
+    grid.innerHTML = mine.map(post => {
+      const time = new Date(post.time).toLocaleString();
+      const text = escapeHtml(post.text);
+      const thumb = post.imageDataUrl ? `<div class="thumb"><img src="${post.imageDataUrl}" alt=""></div>` : '';
+      const key = 'post_'+post.id;
+      const arr = (comments[key]||[]);
+      const preview = arr.slice(0,2).map(c => `<div class="comment-mini"><strong>${escapeHtml(c.name)}</strong> • ${new Date(c.time).toLocaleString()}<div style="margin-top:6px">${escapeHtml(c.text)}</div></div>`).join('');
+      const count = arr.length;
+      return `<div class="blog-post" data-id="${post.id}">
+        <a href="post.html?id=${post.id}" style="text-decoration:none;color:inherit;">
+          ${thumb}
+          <div class="content"><strong>${escapeHtml(post.name)}</strong><div class="meta">${time}</div><p style="margin-top:8px">${text.length>260?text.slice(0,260)+'…':text}</p></div>
+        </a>
+        ${preview ? `<div class="comments-preview">${preview}</div>` : `<div class="comments-preview" style="color:#666">No comments yet</div>`}
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="toggle-post-comments" data-id="${post.id}">Show comments (${count})</button>
+          <a href="post.html?id=${post.id}" style="margin-left:auto"><button class="secondary">Open Post</button></a>
+          <button class="btn-delete" data-id="${post.id}" title="Delete post">Delete</button>
+        </div>
+        <div id="post-comments-${post.id}" class="post-comments" style="display:none"></div>
+      </div>`;
+    }).join("");
+
+    // attach toggles & delete handlers
+    attachPostHandlers();
+  }
+
+  /* ---------------- attach post handlers (toggles + delete) ---------------- */
+  function attachPostHandlers(){
+    document.querySelectorAll(".toggle-post-comments").forEach(btn => {
+      btn.removeEventListener?.("click", ()=>{}); // no-op to avoid some double-binding in older browsers
+      btn.addEventListener("click", (e)=>{
+        const id = btn.dataset.id;
+        const container = document.getElementById(`post-comments-${id}`);
+        if (!container) return;
+        if (container.style.display === "none" || container.style.display === "") {
+          container.style.display = "block";
+          renderPostComments(id, container);
+          btn.textContent = "Hide comments";
+        } else {
+          container.style.display = "none";
+          btn.textContent = `Show comments (${(getAllComments()['post_'+id]||[]).length})`;
+        }
+      });
+    });
+
+    // delete buttons
+    document.querySelectorAll(".btn-delete").forEach(b => {
+      b.addEventListener("click", (e)=>{
+        const id = b.dataset.id;
+        deletePost(id);
+      });
+    });
+  }
+
+  /* ---------------- Post comment UI (inline feed) ---------------- */
+  function renderPostComments(postId, container){
+    const key = 'post_'+postId;
+    const all = getAllComments();
+    const arr = all[key] || [];
+    let html = '';
+    if (arr.length === 0) {
+      html += `<div style="color:#666;margin-bottom:8px">No comments yet — be the first to reply kindly.</div>`;
+    } else {
+      html += arr.map(c => `<div class="comment"><div class="meta"><strong>${escapeHtml(c.name)}</strong> • ${new Date(c.time).toLocaleString()}</div><div>${escapeHtml(c.text)}</div></div>`).join('');
+    }
+    html += `<div style="margin-top:8px">
+      <input id="post-comment-name-${postId}" placeholder="Your name (optional)" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;margin-top:6px">
+      <textarea id="post-comment-text-${postId}" rows="3" placeholder="Write a comment..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;margin-top:8px"></textarea>
+      <div style="margin-top:6px"><button id="post-comment-submit-${postId}" type="button">Post Comment</button></div>
+    </div>`;
+    container.innerHTML = html;
+
+    const submit = document.getElementById(`post-comment-submit-${postId}`);
+    if (submit) submit.addEventListener("click", ()=>{
+      const name = document.getElementById(`post-comment-name-${postId}`).value.trim() || "Anonymous";
+      const text = document.getElementById(`post-comment-text-${postId}`).value.trim();
+      if (!text) { alert("Please enter a comment."); return; }
+      const allComments = getAllComments();
+      allComments[key] = allComments[key] || [];
+      allComments[key].push({ name, text, time: new Date().toISOString() });
+      saveAllComments(allComments);
+      renderPostComments(postId, container);
+      // refresh comment counts & previews across feed
+      renderAllPosts();
+    });
+  }
+
+  /* ---------------- Reviews rendering + inline comments ---------------- */
+  function renderReviews(){
+    const grid = document.querySelector(".reviews-grid");
+    if (!grid) return;
+    const reviews = getReviews();
+    const comments = getAllComments();
+    if (!reviews || reviews.length === 0) {
+      grid.innerHTML = `<div class="review-card" style="text-align:center;padding:20px"><div style="font-weight:600">No reviews yet</div><p style="color:#555">Be the first to review a product.</p></div>`;
+      return;
+    }
+    grid.innerHTML = reviews.map(r => {
+      const time = new Date(r.time).toLocaleString();
+      const thumb = r.imageDataUrl ? `<div class="thumb"><img src="${r.imageDataUrl}" alt=""></div>` : '';
+      const key = 'review_'+r.id;
+      const arr = comments[key] || [];
+      const preview = arr.slice(0,2).map(c => `<div class="comment-mini"><strong>${escapeHtml(c.name)}</strong> • ${new Date(c.time).toLocaleString()}<div style="margin-top:6px">${escapeHtml(c.text)}</div></div>`).join('');
+      const count = arr.length;
+      return `<div class="review-card" data-id="${r.id}">
+        ${thumb}
+        <div style="font-weight:600">${escapeHtml(r.name || 'Anonymous')}</div>
+        <div class="meta">${time} • ${count} comment(s)</div>
+        <p style="margin-top:8px">${escapeHtml(r.text)}</p>
+        ${preview ? `<div class="comments-preview">${preview}</div>` : `<div style="color:#666">No comments yet</div>`}
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+          <button class="toggle-review-comments" data-id="${r.id}">Show comments (${count})</button>
+          <button class="btn-delete-review" data-id="${r.id}" title="Delete review">Delete</button>
+        </div>
+        <div id="review-comments-${r.id}" class="review-comments" style="display:none"></div>
+      </div>`;
+    }).join("");
+
+    // toggles + delete
+    document.querySelectorAll(".toggle-review-comments").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        const id = btn.dataset.id;
+        const container = document.getElementById(`review-comments-${id}`);
+        if (!container) return;
+        if (container.style.display === "none" || container.style.display === "") {
+          container.style.display = "block";
+          renderReviewComments(id, container);
+          btn.textContent = "Hide comments";
+        } else {
+          container.style.display = "none";
+          btn.textContent = `Show comments (${(getAllComments()['review_'+id]||[]).length})`;
+        }
+      });
+    });
+
+    document.querySelectorAll(".btn-delete-review").forEach(b => {
+      b.addEventListener("click", () => deleteReview(b.dataset.id));
+    });
+  }
+
+  function renderReviewComments(reviewId, container){
+    const key = 'review_'+reviewId;
+    const arr = getAllComments()[key] || [];
+    let html = '';
+    if (arr.length === 0) html += `<div style="color:#666;margin-bottom:8px">No comments yet — be the first to reply kindly.</div>`;
+    else html += arr.map(c => `<div class="comment"><div class="meta"><strong>${escapeHtml(c.name)}</strong> • ${new Date(c.time).toLocaleString()}</div><div>${escapeHtml(c.text)}</div></div>`).join('');
+    html += `<div style="margin-top:8px">
+      <input id="review-comment-name-${reviewId}" placeholder="Your name (optional)" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;margin-top:6px">
+      <textarea id="review-comment-text-${reviewId}" rows="3" placeholder="Write a comment..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;margin-top:8px"></textarea>
+      <div style="margin-top:6px"><button id="review-comment-submit-${reviewId}" type="button">Post Comment</button></div>
+    </div>`;
+    container.innerHTML = html;
+    const submit = document.getElementById(`review-comment-submit-${reviewId}`);
+    if (submit) submit.addEventListener("click", ()=>{
+      const name = document.getElementById(`review-comment-name-${reviewId}`).value.trim() || "Anonymous";
+      const text = document.getElementById(`review-comment-text-${reviewId}`).value.trim();
+      if (!text) { alert("Please enter a comment."); return; }
+      const all = getAllComments();
+      all[key] = all[key] || [];
+      all[key].push({ name, text, time: new Date().toISOString() });
+      saveAllComments(all);
+      renderReviewComments(reviewId, container);
+      renderReviews();
+    });
+  }
+
+  /* ---------------- Post detail page (full post + comments) ---------------- */
+  function renderSinglePost(){
+    if (!window.location.pathname.includes("post.html")) return;
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    const container = $(".post-detail");
+    if (!container) return;
+    if (!id) { container.innerHTML = "<p>No post id provided.</p>"; return; }
+    const posts = getPosts();
+    const post = posts.find(p => String(p.id) === String(id));
+    if (!post) { container.innerHTML = "<p>Post not found.</p>"; return; }
+
+    container.innerHTML = `<h2>${escapeHtml(post.name || 'Anonymous')}</h2>
+      <div class="meta">${new Date(post.time).toLocaleString()}</div>
+      ${post.imageDataUrl ? `<div style="margin-top:12px"><img src="${post.imageDataUrl}" style="width:100%;max-height:420px;object-fit:cover;border-radius:8px" alt=""></div>`:""}
+      <div class="post-body" style="margin-top:12px"><p style="white-space:pre-wrap">${escapeHtml(post.text)}</p></div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <a href="FinalBlog.html"><button class="secondary">Back to Feed</button></a>
+        <button id="delete-single-post" class="btn-delete" data-id="${post.id}">Delete Post</button>
+      </div>
+      <section class="comments" style="margin-top:18px">
+        <h3>Comments</h3>
+        <div id="comments-list"></div>
+        <div style="margin-top:10px">
+          <input id="comment-name" placeholder="Your name (optional)" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px">
+          <textarea id="comment-text" rows="4" placeholder="Write a supportive comment..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;margin-top:8px"></textarea>
+          <div style="margin-top:8px"><button id="comment-submit">Post Comment</button></div>
+        </div>
+      </section>`;
+
+    renderCommentsFor('post_'+id, $('#comments-list'));
+
+    const submit = $("#comment-submit");
+    if (submit) submit.addEventListener("click", ()=>{
+      const name = $("#comment-name").value.trim() || "Anonymous";
+      const text = $("#comment-text").value.trim();
+      if (!text) { alert("Enter a comment."); return; }
+      const all = getAllComments();
+      all['post_'+id] = all['post_'+id] || [];
+      all['post_'+id].push({ name, text, time: new Date().toISOString() });
+      saveAllComments(all);
+      $("#comment-text").value = "";
+      renderCommentsFor('post_'+id, $('#comments-list'));
+      // update feed previews/counts
+      renderAllPosts();
+    });
+
+    // attach delete on single post
+    const delBtn = $("#delete-single-post");
+    if (delBtn) delBtn.addEventListener("click", ()=> deletePost(id));
+  }
+
+  function renderCommentsFor(key, container){
+    const arr = getAllComments()[key] || [];
+    if (!container) return;
+    if (arr.length === 0) { container.innerHTML = `<div style="color:#666">No comments yet.</div>`; return; }
+    container.innerHTML = arr.map(c=>`<div class="comment"><div class="meta"><strong>${escapeHtml(c.name)}</strong> • ${new Date(c.time).toLocaleString()}</div><div>${escapeHtml(c.text)}</div></div>`).join('');
+  }
+
+  /* ---------------- Posting forms (feed + reviews) ---------------- */
+  const postForm = $("#post-form");
+  if (postForm){
+    postForm.addEventListener("submit", e=>{
+      e.preventDefault();
+      const name = (postForm.querySelector("#post-name")?.value||"").trim() || (getRegisteredUser()?.username || "Anonymous");
+      const text = (postForm.querySelector("#post-text")?.value||"").trim();
+      if (!text){ alert("Please enter a message before posting."); return; }
+      const fileInput = postForm.querySelector("#post-image");
+      const newId = Date.now();
+      const saveAndRedirect = (dataUrl) => {
+        const posts = getPosts();
+        posts.unshift({ id:newId, name, text, imageDataUrl: dataUrl||"", time: new Date().toISOString() });
+        savePosts(posts);
+        postForm.reset();
+        // go to single post view
+        window.location.href = `post.html?id=${newId}`;
+      };
+      if (fileInput && fileInput.files && fileInput.files[0]){
+        const reader = new FileReader();
+        reader.onload = ev => saveAndRedirect(ev.target.result);
+        reader.readAsDataURL(fileInput.files[0]);
+      } else saveAndRedirect("");
+    });
+  }
+
+  const reviewForm = $("#review-form");
+  if (reviewForm){
+    reviewForm.addEventListener("submit", e=>{
+      e.preventDefault();
+      const name = (reviewForm.querySelector("#review-name")?.value||"").trim() || (getRegisteredUser()?.username || "Anonymous");
+      const text = (reviewForm.querySelector("#review-text")?.value||"").trim();
+      if (!text){ alert("Please enter a review."); return; }
+      const fileInput = reviewForm.querySelector("#review-image");
+      const newId = Date.now();
+      const saveAndRerender = (dataUrl) => {
+        const reviews = getReviews();
+        reviews.unshift({ id:newId, name, text, imageDataUrl: dataUrl||"", time: new Date().toISOString() });
+        saveReviews(reviews);
+        reviewForm.reset();
+        document.querySelector('.reviews-grid')?.scrollIntoView({behavior:'smooth'});
+      };
+      if (fileInput && fileInput.files && fileInput.files[0]){
+        const reader = new FileReader();
+        reader.onload = ev => saveAndRerender(ev.target.result);
+        reader.readAsDataURL(fileInput.files[0]);
+      } else saveAndRerender("");
+    });
+  }
+
+  /* ---------------- Registration & login (simple, local) ---------------- */
+  const regForm = $("#registration-form");
+  if (regForm){
+    regForm.addEventListener("submit", e=>{
+      e.preventDefault();
+      const uname = (regForm.querySelector("#username")?.value||"").trim();
+      const email = (regForm.querySelector("#email")?.value||"").trim();
+      const pw = (regForm.querySelector("#password")?.value||"");
+      const cpw = (regForm.querySelector("#confirm-password")?.value||"");
+      const errors = [];
+      if (uname.length < 3) errors.push("Username at least 3 chars.");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.push("Enter a valid email.");
+      if (pw.length < 6) errors.push("Password at least 6 chars.");
+      if (pw !== cpw) errors.push("Passwords must match.");
+      if (errors.length){ alert(errors.join("\n")); return; }
+      localStorage.setItem("pu_registered_user", JSON.stringify({ username: uname, email }));
+      alert("Registered — thanks! Redirecting to Blogs.");
       window.location.href = "FinalBlog.html";
     });
   }
-
-  // ---------- Login Form ----------
-  const loginForm = document.getElementById("login-form");
-  if (loginForm) {
-    const loginUsernameInput = document.getElementById("login-username");
-    const loginPasswordInput = document.getElementById("login-password");
-
-    // demo hardcoded user (only for demo - do NOT use on production)
-    const validUser = {
-      username: "parentUser",
-      password: "parentPass123"
-    };
-
-    loginForm.addEventListener("submit", function (event) {
-      event.preventDefault();
-
-      const enteredUsername = loginUsernameInput ? loginUsernameInput.value.trim() : "";
-      const enteredPassword = loginPasswordInput ? loginPasswordInput.value : "";
-
-      if (enteredUsername === validUser.username && enteredPassword === validUser.password) {
-        alert("Login successful! Redirecting to blog page...");
-        window.location.href = "FinalBlog.html";
-      } else {
-        alert("Invalid username or password. Please try again.");
-      }
+  const loginForm = $("#login-form");
+  if (loginForm){
+    loginForm.addEventListener("submit", e=>{
+      e.preventDefault();
+      const entered = (loginForm.querySelector("#login-username")?.value||"").trim();
+      const enteredPw = (loginForm.querySelector("#login-password")?.value||"");
+      const registered = JSON.parse(localStorage.getItem("pu_registered_user")||"null");
+      const demo = { username: "parentUser", password: "parentPass123" };
+      const ok = (registered && entered === registered.username) || (entered === demo.username && enteredPw === demo.password);
+      if (ok) { alert("Login successful"); window.location.href = "FinalBlog.html"; } else alert("Invalid username or password.");
     });
   }
-});
+  function getRegisteredUser(){ try{ return JSON.parse(localStorage.getItem("pu_registered_user")||"null"); }catch{return null;} }
 
+  /* ---------------- init render ---------------- */
+  renderPoll();
+  renderAllPosts();
+  renderReviews();
+  renderSinglePost();
+});
 
