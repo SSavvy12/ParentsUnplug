@@ -1,4 +1,3 @@
-// script.js — feed + comments preview + reviews + poll + registration (localStorage)
 document.addEventListener("DOMContentLoaded", () => {
   const $ = s => document.querySelector(s);
   const $$ = s => Array.from(document.querySelectorAll(s));
@@ -22,6 +21,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const REVIEWS_KEY = "pu_reviews_v1";
   const COMMENTS_KEY = "pu_comments_v1";
   const POLL_KEY = "pu_poll_v1";
+  const POLL_VOTES_KEY = "pu_poll_votes_v1";
 
   const defaultPoll = {
     question: "What's your biggest parenting challenge this week?",
@@ -41,6 +41,29 @@ document.addEventListener("DOMContentLoaded", () => {
   function getPoll(){ try{ return JSON.parse(localStorage.getItem(POLL_KEY) || JSON.stringify(defaultPoll)); }catch{return defaultPoll;} }
   function savePoll(p){ localStorage.setItem(POLL_KEY, JSON.stringify(p)); renderPoll(); }
 
+  function getPollVotes(){ try{ return JSON.parse(localStorage.getItem(POLL_VOTES_KEY) || "{}"); } catch { return {}; } }
+  function savePollVotes(v){ localStorage.setItem(POLL_VOTES_KEY, JSON.stringify(v)); }
+
+  function hasUserVoted(pollId, username){
+    if (!username) return false;
+    const votes = getPollVotes();
+    return !!(votes[pollId] && votes[pollId].usernames && votes[pollId].usernames[username]);
+  }
+  function markUserVoted(pollId, username){
+    if (!username) return;
+    const votes = getPollVotes();
+    if (!votes[pollId]) votes[pollId] = { usernames: {} };
+    votes[pollId].usernames[username] = true;
+    savePollVotes(votes);
+  }
+  function clearPollVotesForPoll(pollId){
+    const votes = getPollVotes();
+    if (votes[pollId]) {
+      delete votes[pollId];
+      savePollVotes(votes);
+    }
+  }
+
   function escapeHtml(s){ if (!s) return ""; return String(s).replace(/[&<>"'`=\/]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'}[c])); }
   function capital(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
 
@@ -49,6 +72,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const widget = $(".poll-widget");
     if (!widget) return;
     const poll = getPoll();
+
     widget.innerHTML = `<h4>${escapeHtml(poll.question)}</h4>
       <div>${Object.keys(poll.options).map(k=>{
         const v = poll.options[k];
@@ -64,20 +88,47 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="vote-btn">Vote</button>
-        <button class="secondary reset-poll">Reset</button>
       </div>
       <div class="poll-feedback" style="margin-top:8px;font-size:13px;color:var(--muted)"></div>
     `;
-    widget.querySelector(".vote-btn").addEventListener("click", ()=>{
-      const choice = widget.querySelector('input[name="pu_poll_choice"]:checked');
-      if (!choice){ widget.querySelector(".poll-feedback").textContent = "Please choose an option."; return; }
-      const p = getPoll(); p.options[choice.value] = (p.options[choice.value]||0)+1; p.total = (p.total||0)+1; savePoll(p);
-      widget.querySelector(".poll-feedback").textContent = "Thanks — your vote was counted.";
-    });
-    widget.querySelector(".reset-poll").addEventListener("click", ()=>{
-      if(!confirm("Reset poll (clears votes saved in this browser)?")) return;
-      localStorage.removeItem(POLL_KEY); renderPoll();
-    });
+
+    const voteBtn = widget.querySelector(".vote-btn");
+    const feedbackEl = widget.querySelector(".poll-feedback");
+    function lockUIForVotedUser(msg){
+      widget.querySelectorAll('input[name="pu_poll_choice"]').forEach(i => i.disabled = true);
+      if (voteBtn) { voteBtn.disabled = true; voteBtn.textContent = 'Voted'; }
+      if (feedbackEl) feedbackEl.textContent = msg || 'You have already voted.';
+    }
+
+    const reg = getCurrentUser();
+    const pollId = 'main-poll';
+    if (reg && reg.username && hasUserVoted(pollId, reg.username)) {
+      lockUIForVotedUser('You already voted for this poll.');
+    } else {
+      if (feedbackEl) feedbackEl.textContent = 'Sign in to vote (one vote per user).';
+    }
+
+    if (voteBtn) {
+      voteBtn.addEventListener("click", ()=>{
+        const choice = widget.querySelector('input[name="pu_poll_choice"]:checked');
+        if (!choice){ if (feedbackEl) feedbackEl.textContent = "Please choose an option."; return; }
+        const user = getCurrentUser();
+        if (!user || !user.username) {
+          if (feedbackEl) feedbackEl.textContent = "Please sign in to vote.";
+          return;
+        }
+        if (hasUserVoted(pollId, user.username)) {
+          lockUIForVotedUser('You already voted for this poll.');
+          return;
+        }
+        const p = getPoll();
+        p.options[choice.value] = (p.options[choice.value]||0)+1;
+        p.total = (p.total||0)+1;
+        savePoll(p);
+        markUserVoted(pollId, user.username);
+        lockUIForVotedUser('Thanks — your vote was counted.');
+      });
+    }
   }
 
   /* ---------------- Deletion helpers ---------------- */
@@ -85,11 +136,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!confirm("Delete this post? This will remove the post and its comments permanently (in this browser).")) return;
     const posts = getPosts().filter(p => String(p.id) !== String(id));
     savePosts(posts);
-    // remove associated comments
     const comments = getAllComments();
     delete comments['post_'+id];
     saveAllComments(comments);
-    // if user is on single post page for this id, redirect to feed
     if (window.location.pathname.includes("post.html")) {
       const params = new URLSearchParams(window.location.search);
       if (params.get("id") === String(id)) {
@@ -104,25 +153,32 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!confirm("Delete this review? This will remove the review and its comments permanently (in this browser).")) return;
     const reviews = getReviews().filter(r => String(r.id) !== String(id));
     saveReviews(reviews);
-    // remove associated comments
     const comments = getAllComments();
     delete comments['review_'+id];
     saveAllComments(comments);
+    if (window.location.pathname.includes("review.html")) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("id") === String(id)) {
+        window.location.href = "Reviews.html";
+        return;
+      }
+    }
     renderReviews();
   }
 
   /* ---------------- Posts rendering (feed + latest) ---------------- */
   function renderAllPosts(){
-    renderPostsGrid();   // for all .blog-grid instances
-    renderUserBlogsGrid(); // if present
+    renderPostsGrid();
+    renderUserBlogsGrid();
   }
 
-  // Renders all posts into any .blog-grid on the page.
   function renderPostsGrid(){
     const grids = document.querySelectorAll(".blog-grid");
     if (!grids.length) return;
     const posts = getPosts();
     const comments = getAllComments();
+    const current = getCurrentUser();
+
     grids.forEach(grid => {
       if (!posts || posts.length === 0){
         grid.innerHTML = `<div class="blog-post" style="text-align:center;padding:24px;">
@@ -137,13 +193,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const time = new Date(post.time).toLocaleString();
         const text = escapeHtml(post.text);
         const thumb = post.imageDataUrl ? `<div class="thumb"><img src="${post.imageDataUrl}" alt=""></div>` : '';
-        // preview comments
         const key = 'post_'+post.id;
         const arr = (comments[key] || []);
         const previewHtml = arr.slice(0,2).map(c => `<div class="comment-mini"><strong>${escapeHtml(c.name)}</strong> • ${new Date(c.time).toLocaleString()}<div style="margin-top:6px">${escapeHtml(c.text)}</div></div>`).join('');
         const previewArea = previewHtml ? `<div class="comments-preview">${previewHtml}</div>` : `<div class="comments-preview" style="color:#666">No comments yet — be the first to reply.</div>`;
-        // show comment count
         const count = arr.length;
+        const canDelete = current && current.username && (current.username === post.name);
+        const deleteButtonHtml = canDelete ? `<button class="btn-delete" data-id="${post.id}" title="Delete post">Delete</button>` : '';
+
         return `<div class="blog-post" data-id="${post.id}">
           <a href="post.html?id=${post.id}" style="text-decoration:none;color:inherit;">
             ${thumb}
@@ -157,23 +214,22 @@ document.addEventListener("DOMContentLoaded", () => {
           <div style="display:flex;gap:8px;align-items:center;">
             <button class="toggle-post-comments" data-id="${post.id}">Show comments (${count})</button>
             <a href="post.html?id=${post.id}" style="margin-left:auto"><button class="secondary" type="button">Open Post</button></a>
-            <button class="btn-delete" data-id="${post.id}" title="Delete post">Delete</button>
+            ${deleteButtonHtml}
           </div>
           <div id="post-comments-${post.id}" class="post-comments" style="display:none"></div>
         </div>`;
       }).join("");
     });
 
-    // attach toggles & delete handlers
     attachPostHandlers();
   }
 
-  // User Blogs grid (shows only posts by registered username)
   function renderUserBlogsGrid(){
     const grid = $("#user-blog-grid");
     if (!grid) return;
     const posts = getPosts();
     const reg = getRegisteredUser();
+    const current = getCurrentUser();
     if (!reg){ grid.innerHTML = `<div class="blog-post" style="text-align:center;padding:18px"><div style="font-weight:600">Log in to see your blogs</div><p style="color:#555">Register to post and view your posts.</p><div><a href="Subscribe_Page.html"><button>Register</button></a></div></div>`; return; }
     const mine = posts.filter(p => p.name === reg.username);
     if (mine.length === 0){ grid.innerHTML = `<div class="blog-post" style="text-align:center;padding:18px"><div style="font-weight:600">You haven't posted yet</div><p style="color:#555">Write your first story!</p><div><a href="FinalBlog.html"><button>Write a Story</button></a></div></div>`; return; }
@@ -187,6 +243,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const arr = (comments[key]||[]);
       const preview = arr.slice(0,2).map(c => `<div class="comment-mini"><strong>${escapeHtml(c.name)}</strong> • ${new Date(c.time).toLocaleString()}<div style="margin-top:6px">${escapeHtml(c.text)}</div></div>`).join('');
       const count = arr.length;
+      const canDelete = current && current.username && (current.username === post.name);
+      const deleteButtonHtml = canDelete ? `<button class="btn-delete" data-id="${post.id}" title="Delete post">Delete</button>` : '';
+
       return `<div class="blog-post" data-id="${post.id}">
         <a href="post.html?id=${post.id}" style="text-decoration:none;color:inherit;">
           ${thumb}
@@ -196,20 +255,19 @@ document.addEventListener("DOMContentLoaded", () => {
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="toggle-post-comments" data-id="${post.id}">Show comments (${count})</button>
           <a href="post.html?id=${post.id}" style="margin-left:auto"><button class="secondary">Open Post</button></a>
-          <button class="btn-delete" data-id="${post.id}" title="Delete post">Delete</button>
+          ${deleteButtonHtml}
         </div>
         <div id="post-comments-${post.id}" class="post-comments" style="display:none"></div>
       </div>`;
     }).join("");
 
-    // attach toggles & delete handlers
     attachPostHandlers();
   }
 
   /* ---------------- attach post handlers (toggles + delete) ---------------- */
   function attachPostHandlers(){
     document.querySelectorAll(".toggle-post-comments").forEach(btn => {
-      btn.removeEventListener?.("click", ()=>{}); // no-op to avoid some double-binding in older browsers
+      btn.removeEventListener?.("click", ()=>{});
       btn.addEventListener("click", (e)=>{
         const id = btn.dataset.id;
         const container = document.getElementById(`post-comments-${id}`);
@@ -225,7 +283,6 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
 
-    // delete buttons
     document.querySelectorAll(".btn-delete").forEach(b => {
       b.addEventListener("click", (e)=>{
         const id = b.dataset.id;
@@ -262,7 +319,6 @@ document.addEventListener("DOMContentLoaded", () => {
       allComments[key].push({ name, text, time: new Date().toISOString() });
       saveAllComments(allComments);
       renderPostComments(postId, container);
-      // refresh comment counts & previews across feed
       renderAllPosts();
     });
   }
@@ -273,10 +329,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!grid) return;
     const reviews = getReviews();
     const comments = getAllComments();
+    const current = getCurrentUser();
+
     if (!reviews || reviews.length === 0) {
       grid.innerHTML = `<div class="review-card" style="text-align:center;padding:20px"><div style="font-weight:600">No reviews yet</div><p style="color:#555">Be the first to review a product.</p></div>`;
       return;
     }
+
     grid.innerHTML = reviews.map(r => {
       const time = new Date(r.time).toLocaleString();
       const thumb = r.imageDataUrl ? `<div class="thumb"><img src="${r.imageDataUrl}" alt=""></div>` : '';
@@ -284,15 +343,24 @@ document.addEventListener("DOMContentLoaded", () => {
       const arr = comments[key] || [];
       const preview = arr.slice(0,2).map(c => `<div class="comment-mini"><strong>${escapeHtml(c.name)}</strong> • ${new Date(c.time).toLocaleString()}<div style="margin-top:6px">${escapeHtml(c.text)}</div></div>`).join('');
       const count = arr.length;
+
+      // SHOW DELETE BUTTON ONLY TO THE REVIEW AUTHOR (logged-in user whose username === review.name)
+      const canDelete = current && current.username && (current.username === r.name);
+      const deleteButtonHtml = canDelete ? `<button class="btn-delete-review" data-id="${r.id}" title="Delete review">Delete</button>` : '';
+
+      // Link to single-review page
+      const openButtonHtml = `<a href="review.html?id=${r.id}" style="margin-left:auto"><button class="secondary" type="button">Open Review</button></a>`;
+
       return `<div class="review-card" data-id="${r.id}">
         ${thumb}
         <div style="font-weight:600">${escapeHtml(r.name || 'Anonymous')}</div>
         <div class="meta">${time} • ${count} comment(s)</div>
-        <p style="margin-top:8px">${escapeHtml(r.text)}</p>
+        <p style="margin-top:8px">${escapeHtml(r.text.length>300? r.text.slice(0,300)+'…' : r.text)}</p>
         ${preview ? `<div class="comments-preview">${preview}</div>` : `<div style="color:#666">No comments yet</div>`}
         <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
           <button class="toggle-review-comments" data-id="${r.id}">Show comments (${count})</button>
-          <button class="btn-delete-review" data-id="${r.id}" title="Delete review">Delete</button>
+          ${openButtonHtml}
+          ${deleteButtonHtml}
         </div>
         <div id="review-comments-${r.id}" class="review-comments" style="display:none"></div>
       </div>`;
@@ -315,6 +383,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
 
+    // Only attach delete handlers to the buttons that were rendered (authors only)
     document.querySelectorAll(".btn-delete-review").forEach(b => {
       b.addEventListener("click", () => deleteReview(b.dataset.id));
     });
@@ -346,7 +415,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  /* ---------------- Post detail page (full post + comments) ---------------- */
+  /* ---------------- Single post page (existing) ---------------- */
   function renderSinglePost(){
     if (!window.location.pathname.includes("post.html")) return;
     const params = new URLSearchParams(window.location.search);
@@ -358,13 +427,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const post = posts.find(p => String(p.id) === String(id));
     if (!post) { container.innerHTML = "<p>Post not found.</p>"; return; }
 
+    const current = getCurrentUser();
+    const canDelete = current && current.username && (current.username === post.name);
+    const deleteBtnHtml = canDelete ? `<button id="delete-single-post" class="btn-delete" data-id="${post.id}">Delete Post</button>` : '';
+
     container.innerHTML = `<h2>${escapeHtml(post.name || 'Anonymous')}</h2>
       <div class="meta">${new Date(post.time).toLocaleString()}</div>
       ${post.imageDataUrl ? `<div style="margin-top:12px"><img src="${post.imageDataUrl}" style="width:100%;max-height:420px;object-fit:cover;border-radius:8px" alt=""></div>`:""}
       <div class="post-body" style="margin-top:12px"><p style="white-space:pre-wrap">${escapeHtml(post.text)}</p></div>
       <div style="display:flex;gap:8px;margin-top:12px;">
         <a href="FinalBlog.html"><button class="secondary">Back to Feed</button></a>
-        <button id="delete-single-post" class="btn-delete" data-id="${post.id}">Delete Post</button>
+        ${deleteBtnHtml}
       </div>
       <section class="comments" style="margin-top:18px">
         <h3>Comments</h3>
@@ -389,11 +462,9 @@ document.addEventListener("DOMContentLoaded", () => {
       saveAllComments(all);
       $("#comment-text").value = "";
       renderCommentsFor('post_'+id, $('#comments-list'));
-      // update feed previews/counts
       renderAllPosts();
     });
 
-    // attach delete on single post
     const delBtn = $("#delete-single-post");
     if (delBtn) delBtn.addEventListener("click", ()=> deletePost(id));
   }
@@ -405,13 +476,70 @@ document.addEventListener("DOMContentLoaded", () => {
     container.innerHTML = arr.map(c=>`<div class="comment"><div class="meta"><strong>${escapeHtml(c.name)}</strong> • ${new Date(c.time).toLocaleString()}</div><div>${escapeHtml(c.text)}</div></div>`).join('');
   }
 
+  /* ---------------- Single review page (NEW) ---------------- */
+  function renderSingleReview(){
+    if (!window.location.pathname.includes("review.html")) return;
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    const container = $(".review-detail");
+    if (!container) return;
+    if (!id) { container.innerHTML = "<p>No review id provided.</p>"; return; }
+    const reviews = getReviews();
+    const review = reviews.find(r => String(r.id) === String(id));
+    if (!review) { container.innerHTML = "<p>Review not found.</p>"; return; }
+
+    const current = getCurrentUser();
+    const canDelete = current && current.username && (current.username === review.name);
+    const deleteBtnHtml = canDelete ? `<button id="delete-single-review" class="btn-delete-review" data-id="${review.id}">Delete Review</button>` : '';
+
+    const comments = getAllComments()['review_'+id] || [];
+
+    container.innerHTML = `<h2>${escapeHtml(review.name || 'Anonymous')}</h2>
+      <div class="meta">${new Date(review.time).toLocaleString()}</div>
+      ${review.imageDataUrl ? `<div style="margin-top:12px"><img src="${review.imageDataUrl}" style="width:100%;max-height:420px;object-fit:cover;border-radius:8px" alt=""></div>` : ''}
+      <div class="post-body" style="margin-top:12px"><p style="white-space:pre-wrap">${escapeHtml(review.text)}</p></div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <a href="Reviews.html"><button class="secondary">Back to Reviews</button></a>
+        ${deleteBtnHtml}
+      </div>
+      <section class="comments" style="margin-top:18px">
+        <h3>Comments (${comments.length})</h3>
+        <div id="single-review-comments"></div>
+        <div style="margin-top:10px">
+          <input id="single-review-comment-name" placeholder="Your name (optional)" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px">
+          <textarea id="single-review-comment-text" rows="4" placeholder="Write a supportive comment..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;margin-top:8px"></textarea>
+          <div style="margin-top:8px"><button id="single-review-comment-submit">Post Comment</button></div>
+        </div>
+      </section>`;
+
+    renderCommentsFor('review_'+id, $('#single-review-comments'));
+
+    const submit = $("#single-review-comment-submit");
+    if (submit) submit.addEventListener("click", ()=>{
+      const name = $("#single-review-comment-name").value.trim() || "Anonymous";
+      const text = $("#single-review-comment-text").value.trim();
+      if (!text) { alert("Enter a comment."); return; }
+      const all = getAllComments();
+      all['review_'+id] = all['review_'+id] || [];
+      all['review_'+id].push({ name, text, time: new Date().toISOString() });
+      saveAllComments(all);
+      $("#single-review-comment-text").value = "";
+      renderCommentsFor('review_'+id, $('#single-review-comments'));
+      renderReviews();
+    });
+
+    const delBtn = $("#delete-single-review");
+    if (delBtn) delBtn.addEventListener("click", ()=> deleteReview(id));
+  }
+
   /* ---------------- Posting forms (feed + reviews) ---------------- */
   const postForm = $("#post-form");
   if (postForm){
     postForm.addEventListener("submit", e=>{
       e.preventDefault();
-      const name = (postForm.querySelector("#post-name")?.value||"").trim() || (getRegisteredUser()?.username || "Anonymous");
+      const providedName = (postForm.querySelector("#post-name")?.value||"").trim();
       const text = (postForm.querySelector("#post-text")?.value||"").trim();
+      const name = providedName || (getRegisteredUser()?.username || "Anonymous");
       if (!text){ alert("Please enter a message before posting."); return; }
       const fileInput = postForm.querySelector("#post-image");
       const newId = Date.now();
@@ -420,7 +548,6 @@ document.addEventListener("DOMContentLoaded", () => {
         posts.unshift({ id:newId, name, text, imageDataUrl: dataUrl||"", time: new Date().toISOString() });
         savePosts(posts);
         postForm.reset();
-        // go to single post view
         window.location.href = `post.html?id=${newId}`;
       };
       if (fileInput && fileInput.files && fileInput.files[0]){
@@ -435,7 +562,9 @@ document.addEventListener("DOMContentLoaded", () => {
   if (reviewForm){
     reviewForm.addEventListener("submit", e=>{
       e.preventDefault();
-      const name = (reviewForm.querySelector("#review-name")?.value||"").trim() || (getRegisteredUser()?.username || "Anonymous");
+      // prefer a provided name, otherwise use registered username
+      const providedName = (reviewForm.querySelector("#review-name")?.value||"").trim();
+      const name = providedName || (getRegisteredUser()?.username || "Anonymous");
       const text = (reviewForm.querySelector("#review-text")?.value||"").trim();
       if (!text){ alert("Please enter a review."); return; }
       const fileInput = reviewForm.querySelector("#review-image");
@@ -471,8 +600,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (pw !== cpw) errors.push("Passwords must match.");
       if (errors.length){ alert(errors.join("\n")); return; }
       localStorage.setItem("pu_registered_user", JSON.stringify({ username: uname, email }));
-      alert("Registered — thanks! Redirecting to Blogs.");
-      window.location.href = "FinalBlog.html";
+      localStorage.setItem("pu_current_user", JSON.stringify({ username: uname }));
+      alert("Registered — thanks! Redirecting.");
+      // redirect heuristics: if user came from reviews, back to reviews; else blog
+      if (window.location.pathname.includes("Reviews.html")) window.location.href = "Reviews.html";
+      else window.location.href = "FinalBlog.html";
     });
   }
   const loginForm = $("#login-form");
@@ -484,9 +616,16 @@ document.addEventListener("DOMContentLoaded", () => {
       const registered = JSON.parse(localStorage.getItem("pu_registered_user")||"null");
       const demo = { username: "parentUser", password: "parentPass123" };
       const ok = (registered && entered === registered.username) || (entered === demo.username && enteredPw === demo.password);
-      if (ok) { alert("Login successful"); window.location.href = "FinalBlog.html"; } else alert("Invalid username or password.");
+      if (ok) {
+        localStorage.setItem("pu_current_user", JSON.stringify({ username: entered }));
+        alert("Login successful");
+        if (window.location.pathname.includes("Reviews.html")) window.location.href = "Reviews.html";
+        else window.location.href = "FinalBlog.html";
+      } else alert("Invalid username or password.");
     });
   }
+
+  function getCurrentUser(){ try{ return JSON.parse(localStorage.getItem("pu_current_user") || "null"); }catch{return null;} }
   function getRegisteredUser(){ try{ return JSON.parse(localStorage.getItem("pu_registered_user")||"null"); }catch{return null;} }
 
   /* ---------------- init render ---------------- */
@@ -494,5 +633,5 @@ document.addEventListener("DOMContentLoaded", () => {
   renderAllPosts();
   renderReviews();
   renderSinglePost();
+  renderSingleReview();
 });
-
