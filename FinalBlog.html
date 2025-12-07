@@ -31,7 +31,10 @@
           <h2>Share Your Story</h2>
           <form id="post-form" aria-label="Share your story form">
             <label for="post-name" style="display:block;margin-top:8px">Name (optional)</label>
-            <input id="post-name" name="post-name" type="text" placeholder="Anonymous or a nickname">
+            <div style="display:flex;gap:8px;align-items:center">
+              <input id="post-name" name="post-name" type="text" placeholder="Anonymous or a nickname" style="flex:1">
+              <button id="change-anon-post-name" type="button" class="secondary" style="display:none">Change anonymous name</button>
+            </div>
 
             <label for="post-text" style="display:block;margin-top:8px">Your story or tip</label>
             <textarea id="post-text" name="post-text" rows="4" placeholder="Write your parenting tip or story here..." required></textarea>
@@ -51,6 +54,14 @@
           <h2>Community Feed</h2>
           <div class="blog-grid" id="all-posts-grid">
             <!-- populated by script.js with ALL posts; each shows comment previews and toggle -->
+          </div>
+        </section>
+
+        <!-- User Blogs section (new) -->
+        <section class="blogs-section" style="margin-top:18px">
+          <h2>Your Blogs</h2>
+          <div id="user-blog-grid" class="blog-grid">
+            <!-- populated by script.js with posts authored by the current user (or anon handle) -->
           </div>
         </section>
       </main>
@@ -74,8 +85,6 @@
   <script src="script.js"></script>
 </body>
 </html>
-
-
 
 
 
