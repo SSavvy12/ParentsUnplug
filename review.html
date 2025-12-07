@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Parents Unplugged - Review</title>
+  <title>Parents Unplugged - Reviews</title>
   <link rel="stylesheet" href="style3.css">
   <link href="https://fonts.googleapis.com/css2?family=Chewy&family=Poppins:wght@300;500&display=swap" rel="stylesheet">
 </head>
@@ -20,14 +20,44 @@
         </ul>
       </nav>
       <span class="header-title">
-        <h1>Parent Review</h1>
-        <p class="subtitle">Full review view</p>
+        <h1>Parents Unplugged - Reviews</h1>
+        <p class="subtitle">Honest parent reviews so families stay safe.</p>
       </span>
     </header>
 
     <main>
-      <section class="post-detail review-detail card">
-        <!-- populated by script.js's renderSingleReview() -->
+      <section class="hero">
+        <h2>Honest Parent Reviews 📝</h2>
+        <p>Share experiences about products that may be unsafe or unreliable — your input helps other parents make informed choices.</p>
+      </section>
+
+      <section class="post-box">
+        <h2>Write a Review</h2>
+        <form id="review-form">
+          <label for="review-name">Name (optional)</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="review-name" type="text" placeholder="Anonymous or a nickname" style="flex:1">
+            <button id="change-anon-review-name" type="button" class="secondary" style="display:none">Change anonymous name</button>
+          </div>
+
+          <label for="review-text">Your Review</label>
+          <textarea id="review-text" rows="4" required placeholder="Share your experience..."></textarea>
+
+          <label for="review-image">Upload an Image (optional)</label>
+          <input id="review-image" type="file" accept="image/*">
+
+          <div style="margin-top:10px">
+            <button type="submit">Post Review</button>
+            <button type="button" class="secondary" onclick="document.getElementById('review-form').reset()">Clear</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="blogs-section">
+        <h2>Popular Reviews</h2>
+        <div class="reviews-grid">
+          <!-- populated by script.js -->
+        </div>
       </section>
     </main>
 
