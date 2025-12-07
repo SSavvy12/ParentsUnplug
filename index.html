@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Parents Unplugged</title>
+  <link rel="stylesheet" href="style3.css">
+  <link href="https://fonts.googleapis.com/css2?family=Chewy&family=Poppins:wght@300;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <nav>
+        <ul>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="FinalBlog.html">Blogs</a></li>
+          <li><a href="Reviews.html">Reviews</a></li>
+          <li><a href="FinalAbout.html">About</a></li>
+          <li><a href="Subscribe_Page.html">Subscribe</a></li>
+        </ul>
+      </nav>
+
+      <span class="header-title">
+        <h1>Welcome to Parents Unplugged</h1>
+        <p class="subtitle">Parenting tips, honest reviews, and a supportive community.</p>
+      </span>
+    </header>
+
+    <section class="hero">
+      <div id="quote-of-day" class="quote-of-day" aria-live="polite"></div>
+      <h2>You're not alone 💜</h2>
+      <p>Connect, share, and grow with other parents who get it.</p>
+    </section>
+
+    <div class="layout">
+      <main>
+        <section class="info-cards">
+          <div class="card post-box">
+            <h2>Subscribe</h2>
+            <p>Weekly parenting tips, safety alerts, and curated reviews.</p>
+            <form class="subscribe-form" action="#" onsubmit="event.preventDefault();location.href='Subscribe_Page.html'">
+              <input type="email" placeholder="Enter your email">
+              <button type="button" onclick="location.href='Subscribe_Page.html'">Subscribe</button>
+            </form>
+          </div>
+
+          <div class="card">
+            <h2>Top Reviews</h2>
+            <h3>Product safety & experiences</h3>
+            <p>Read parent-submitted reviews to avoid unsafe products.</p>
+            <a href="Reviews.html" style="text-decoration:none;"><button>Read Reviews</button></a>
+          </div>
+        </section>
+
+        <section class="blogs-section">
+          <h2>Latest Blogs</h2>
+          <div class="blog-grid">
+            <!-- populated by script.js with posts (preview + comments) -->
+          </div>
+        </section>
+      </main>
+
+      <aside>
+        <div class="card poll-widget"></div>
+
+        <div class="card">
+          <h3>Quick Links</h3>
+          <ul style="padding-left:18px;color:#222">
+            <li><a href="FinalBlog.html">Community Feed</a></li>
+            <li><a href="Reviews.html">Popular Reviews</a></li>
+            <li><a href="FinalAbout.html">About Us</a></li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="contact-footer">
+      <p>Contact us: ParentingUnplugged@yahoo.com</p>
+      <p>&copy; 2025 Parents Unplugged. All Rights Reserved.</p>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
