@@ -1,93 +1,85 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" >
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" >
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Parents Unplugged</title>
-  <link rel="stylesheet" href="style3.css" >
+  <link rel="stylesheet" href="style3.css">
   <link href="https://fonts.googleapis.com/css2?family=Chewy&family=Poppins:wght@300;500&display=swap" rel="stylesheet">
-  
 </head>
 <body>
   <div class="container">
     <header>
       <nav>
         <ul>
-          <li><a href="index.html">Home Page</a></li>
+          <li><a href="index.html">Home</a></li>
           <li><a href="FinalBlog.html">Blogs</a></li>
           <li><a href="Reviews.html">Reviews</a></li>
-          <li><a href="FinalAbout.html">About Us</a></li>
+          <li><a href="FinalAbout.html">About</a></li>
           <li><a href="Subscribe_Page.html">Subscribe</a></li>
         </ul>
       </nav>
-      <h1>Welcome New Parents, To Parents Unplugged!</h1>
-      <p class="subtitle">Parenting tips, and tricks! Blog without judgement!</p>
+
+      <span class="header-title">
+        <h1>Welcome to Parents Unplugged</h1>
+        <p class="subtitle">Parenting tips, honest reviews, and a supportive community.</p>
+      </span>
     </header>
 
     <section class="hero">
-      <h2>You're not alone in this journey 💜</h2>
+      <div id="quote-of-day" class="quote-of-day" aria-live="polite"></div>
+      <h2>You're not alone 💜</h2>
       <p>Connect, share, and grow with other parents who get it.</p>
     </section>
 
-    <main>
-      <section class="info-cards">
+    <div class="layout">
+      <main>
+        <section class="info-cards">
+          <div class="card post-box">
+            <h2>Subscribe</h2>
+            <p>Weekly parenting tips, safety alerts, and curated reviews.</p>
+            <form class="subscribe-form" action="#" onsubmit="event.preventDefault();location.href='Subscribe_Page.html'">
+              <input type="email" placeholder="Enter your email">
+              <button type="button" onclick="location.href='Subscribe_Page.html'">Subscribe</button>
+            </form>
+          </div>
+
+          <div class="card">
+            <h2>Top Reviews</h2>
+            <h3>Product safety & experiences</h3>
+            <p>Read parent-submitted reviews to avoid unsafe products.</p>
+            <a href="Reviews.html" style="text-decoration:none;"><button>Read Reviews</button></a>
+          </div>
+        </section>
+
+        <section class="blogs-section">
+          <h2>Latest Blogs</h2>
+          <div class="blog-grid">
+            <!-- populated by script.js with posts (preview + comments) -->
+          </div>
+        </section>
+      </main>
+
+      <aside>
+        <div class="card poll-widget"></div>
+
         <div class="card">
-          <h2>Subscribe!</h2>
-          <p>Weekly newsletters of parenting tips and tricks!</p>
-          <form class="subscribe-form">
-            <input type="email" placeholder="Enter your email" required>
-            <button type="submit">Subscribe</button>
-          </form>
+          <h3>Quick Links</h3>
+          <ul style="padding-left:18px;color:#222">
+            <li><a href="FinalBlog.html">Community Feed</a></li>
+            <li><a href="Reviews.html">Popular Reviews</a></li>
+            <li><a href="FinalAbout.html">About Us</a></li>
+          </ul>
         </div>
-        <div class="card">
-          <h2>Warning-</h2>
-          <h3>Hazardous Products!</h3>
-          <p>Look at some product reviews!</p>
-          <button type="button">Reviews</button>
-        </div>
-      </section>
-
-      <section class="blogs-section">
-        <h2>Blogs</h2>
-        <div class="blog-grid">
-          <!-- Blog Post 1 -->
-          <div class="blog-post">
-            <div class="photo-box">
-              <img src="https://media.gettyimages.com/id/2050740191/photo/miami-beach-florida-walgreens-pharmacy-disposable-diapers-huggies-pampers-and-pull-ups-on.jpg?s=612x612&w=gi&k=20&c=Tfme6d9KuVvj4M9KztQ4gq3TZHjxi-Wczl-8ZmcNGrg=" alt="Huggies Diapers">
-            </div>
-            <h4>Anonymous668 <span>🕒 2 hours ago</span></h4>
-            <p>I suggest the new Huggies diapers at Target! 👶</p>
-          </div>
-
-          <!-- Blog Post 2 -->
-          <div class="blog-post">
-            <div class="photo-box">
-              <img src="https://images.unsplash.com/photo-1736995660256-ed2a573afec7?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" alt="Little boy with bike">
-            </div>
-            <h4>Anonymous865 <span>🕒 1 day ago</span></h4>
-            <p>My son scraped his knee riding his bike. What should I do? 🚲</p>
-          </div>
-
-          <!-- Blog Post 3 -->
-          <div class="blog-post">
-            <div class="photo-box">
-              <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQMoKpH7_EGxRrP9mbKEg1qM_h9JqxeJPXzAA&s" alt="Diaper deals">
-            </div>
-            <h4>Anonymous357 <span>🕒 3 days ago</span></h4>
-            <p>Did you hear about the new deals on diapers and formula? 🛒</p>
-          </div>
-        </div>
-      </section>
-    </main>
+      </aside>
+    </div>
 
     <footer class="contact-footer">
-      <p>Contact us:</p>
-      <p>Email: ParentingUnplugged@yahoo.com</p>
-      <p>&copy; 2025 Parenting Unplugged, All rights reserved.</p>
+      <p>Contact us: ParentingUnplugged@yahoo.com</p>
+      <p>&copy; 2025 Parents Unplugged. All Rights Reserved.</p>
     </footer>
   </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
-
-
-
