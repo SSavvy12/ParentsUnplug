@@ -2,7 +2,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const $ = s => document.querySelector(s);
   const $$ = s => Array.from(document.querySelectorAll(s));
 
-  /* ---------------- Quote of the Day (unchanged) ---------------- */
+  /* ---------------- Quote of the Day ---------------- */
   const quotes = [
     "Parenting is a journey, not a destination. — Unknown",
     "There is no such thing as a perfect parent. — Unknown",
@@ -65,10 +65,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function escapeHtml(s){ if (!s) return ""; return String(s).replace(/[&<>"'`=\/]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'}[c])); }
   function capital(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
 
-  /* ---------------- Anonymous-handle helpers ----------------
-     - non-logged-in users must pick one anon handle; it's stored in localStorage (pu_anon_name)
-     - registered users always use their account username
-  -----------------------------------------------------------------*/
+  /* ---------------- Anonymous-handle helpers ---------------- */
   function ensureAnonUIBindings(){
     // Post form anon controls
     const postNameInput = $("#post-name");
@@ -86,14 +83,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function applyAnonLockToInput(inputEl, changeButtonEl){
     const currentUser = getCurrentUser();
-    // If user logged in, ensure name field is editable (they can type or it's prefilled by registration elsewhere)
     if (currentUser && currentUser.username) {
       inputEl.disabled = false;
       if (changeButtonEl) changeButtonEl.style.display = "none";
       return;
     }
-
-    // Not logged in: check for anon name
     const anon = getAnonName();
     if (anon) {
       inputEl.value = anon;
@@ -108,33 +102,29 @@ document.addEventListener("DOMContentLoaded", () => {
           setAnonName(trimmed);
           inputEl.value = trimmed;
           inputEl.disabled = true;
-          // re-render user-specific grids because ownership can change
           renderAllPosts(); renderReviews();
         };
       }
     } else {
-      // no anon yet: allow editing (user will be prompted on first submit to set and persist)
       inputEl.disabled = false;
       if (changeButtonEl) changeButtonEl.style.display = "none";
     }
   }
 
   function ensureAnonExistsOrPrompt(forWhat){
-    // forWhat is a friendly string like "posting" or "reviewing"
     const anon = getAnonName();
-    if (getCurrentUser() && getCurrentUser().username) return true; // logged in users don't need anon
+    if (getCurrentUser() && getCurrentUser().username) return true;
     if (anon) return true;
     let name = prompt(`You're not signed in. Enter a persistent anonymous name to use when ${forWhat} (min 3 chars):`);
     if (!name) return false;
     name = name.trim();
     if (name.length < 3) { alert("Name must be at least 3 characters."); return false; }
     setAnonName(name);
-    // update UI fields and lock them
     ensureAnonUIBindings();
     return true;
   }
 
-  /* ---------------- Poll rendering (unchanged functionality, no reset) ---------------- */
+  /* ---------------- Poll rendering (no reset button) ---------------- */
   function renderPoll(){
     const widget = $(".poll-widget");
     if (!widget) return;
@@ -198,7 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /* ---------------- Deletion helpers (unchanged behavior) ---------------- */
+  /* ---------------- Deletion helpers ---------------- */
   function deletePost(id){
     if (!confirm("Delete this post? This will remove the post and its comments permanently (in this browser).")) return;
     const posts = getPosts().filter(p => String(p.id) !== String(id));
@@ -291,7 +281,6 @@ document.addEventListener("DOMContentLoaded", () => {
     attachPostHandlers();
   }
 
-  // Renders the "Your Blogs" grid (posts authored by current user or anon handle)
   function renderUserBlogsGrid(){
     const grid = $("#user-blog-grid");
     if (!grid) return;
@@ -299,7 +288,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const reg = getRegisteredUser();
     const current = getCurrentUser();
     if (!reg && !getAnonName()){ 
-      // no registered user and no anon set: prompt user to create anon when they try to post, but show a placeholder here
       grid.innerHTML = `<div class="blog-post" style="text-align:center;padding:18px"><div style="font-weight:600">Your blogs</div><p style="color:#555">Your posts (when you create them) will appear here. Sign in or choose an anonymous name to get started.</p></div>`; 
       return; 
     }
@@ -399,7 +387,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  /* ---------------- Reviews rendering + single-review linking ---------------- */
+  /* ---------------- Reviews rendering + linking ---------------- */
   function renderReviews(){
     const grid = document.querySelector(".reviews-grid");
     if (!grid) return;
@@ -440,7 +428,6 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>`;
     }).join("");
 
-    // toggles + delete
     document.querySelectorAll(".toggle-review-comments").forEach(btn => {
       btn.addEventListener("click", (e) => {
         const id = btn.dataset.id;
@@ -488,7 +475,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  /* ---------------- Single post / single review rendering (kept) ---------------- */
+  /* ---------------- Single post / single review rendering ---------------- */
   function renderSinglePost(){
     if (!window.location.pathname.includes("post.html")) return;
     const params = new URLSearchParams(window.location.search);
@@ -549,7 +536,6 @@ document.addEventListener("DOMContentLoaded", () => {
     container.innerHTML = arr.map(c=>`<div class="comment"><div class="meta"><strong>${escapeHtml(c.name)}</strong> • ${new Date(c.time).toLocaleString()}</div><div>${escapeHtml(c.text)}</div></div>`).join('');
   }
 
-  /* ---------------- Single review page ---------------- */
   function renderSingleReview(){
     if (!window.location.pathname.includes("review.html")) return;
     const params = new URLSearchParams(window.location.search);
@@ -614,14 +600,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const regUser = getRegisteredUser();
       const current = getCurrentUser();
 
-      // Decide name: registered user -> account username
       let nameToUse = regUser ? regUser.username : "";
 
       if (!nameToUse) {
-        // not registered: if an anon name exists we use it; otherwise prompt to create one
         if (!getAnonName()) {
           const ok = ensureAnonExistsOrPrompt("posting");
-          if (!ok) return; // user cancelled
+          if (!ok) return;
         }
         nameToUse = getAnonName() || (providedNameInput?.value?.trim() || "Anonymous");
       }
@@ -635,9 +619,7 @@ document.addEventListener("DOMContentLoaded", () => {
         posts.unshift({ id:newId, name: nameToUse || "Anonymous", text, imageDataUrl: dataUrl||"", time: new Date().toISOString() });
         savePosts(posts);
         postForm.reset();
-        // re-apply anon UI (name input might be reset)
         ensureAnonUIBindings();
-        // go to single post view
         window.location.href = `post.html?id=${newId}`;
       };
       if (fileInput && fileInput.files && fileInput.files[0]){
@@ -655,7 +637,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const providedNameInput = reviewForm.querySelector("#review-name");
       const regUser = getRegisteredUser();
 
-      // Decide name
       let nameToUse = regUser ? regUser.username : "";
       if (!nameToUse) {
         if (!getAnonName()) {
@@ -685,7 +666,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  /* ---------------- Registration & login (unchanged except we set pu_current_user) ---------------- */
+  /* ---------------- Registration & login (sets pu_current_user) ---------------- */
   const regForm = $("#registration-form");
   if (regForm){
     regForm.addEventListener("submit", e=>{
@@ -702,8 +683,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (errors.length){ alert(errors.join("\n")); return; }
       localStorage.setItem("pu_registered_user", JSON.stringify({ username: uname, email }));
       localStorage.setItem("pu_current_user", JSON.stringify({ username: uname }));
-      // if user had an anon name, it's still stored but won't be used while logged in
       alert("Registered — thanks! Redirecting to Blogs.");
+      updateSubscribePageUI();
       window.location.href = "FinalBlog.html";
     });
   }
@@ -719,7 +700,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (ok) {
         localStorage.setItem("pu_current_user", JSON.stringify({ username: entered }));
         alert("Login successful");
-        window.location.href = "FinalBlog.html";
+        updateSubscribePageUI();
+        if (window.location.pathname.includes("Subscribe_Page.html")) {
+          // keep user on subscribe page and update UI
+          updateSubscribePageUI();
+        } else {
+          // default redirect
+          window.location.href = "FinalBlog.html";
+        }
       } else alert("Invalid username or password.");
     });
   }
@@ -727,22 +715,63 @@ document.addEventListener("DOMContentLoaded", () => {
   function getCurrentUser(){ try{ return JSON.parse(localStorage.getItem("pu_current_user") || "null"); }catch{return null;} }
   function getRegisteredUser(){ try{ return JSON.parse(localStorage.getItem("pu_registered_user")||"null"); }catch{return null;} }
 
-  /* ---------------- Initialization ---------------- */
-  // apply anon UI handlers to name inputs/buttons
-  ensureAnonUIBindings();
+  /* ---------------- Subscribe page UI update ---------------- */
+  function updateSubscribePageUI(){
+    const current = getCurrentUser();
+    const welcomeSection = $("#user-welcome");
+    const regSection = $("#registration-section");
+    const loginSection = $("#login-section");
 
-  // render initial UI
+    if (current && current.username) {
+      // show welcome, hide register/login
+      if (welcomeSection) {
+        $("#welcome-title").textContent = `Welcome, ${current.username}`;
+        $("#welcome-sub").textContent = `Thanks for being part of Parents Unplugged — use the links below to manage your content.`;
+        welcomeSection.style.display = "block";
+      }
+      if (regSection) regSection.style.display = "none";
+      if (loginSection) loginSection.style.display = "none";
+
+      // Wire logout
+      const logoutBtn = $("#logout-btn");
+      if (logoutBtn) {
+        logoutBtn.onclick = () => {
+          if (!confirm("Log out?")) return;
+          localStorage.removeItem("pu_current_user");
+          updateSubscribePageUI();
+          // After logging out, show registration/login again
+        };
+      }
+
+      // Ensure the quick links point to the right pages (they already do)
+      const goBlogs = $("#go-to-blogs");
+      if (goBlogs) goBlogs.href = "FinalBlog.html";
+      const goReviews = $("#go-to-reviews");
+      if (goReviews) goReviews.href = "Reviews.html";
+    } else {
+      // not logged in: show register/login, hide welcome
+      if (welcomeSection) welcomeSection.style.display = "none";
+      if (regSection) regSection.style.display = "block";
+      if (loginSection) loginSection.style.display = "block";
+    }
+  }
+
+  /* ---------------- init render ---------------- */
+  ensureAnonUIBindings();
   renderPoll();
   renderAllPosts();
   renderReviews();
   renderSinglePost();
   renderSingleReview();
+  updateSubscribePageUI();
 
-  // in case anon was created elsewhere in this session, re-apply UI bindings when page becomes visible
+  // Re-apply subscribe UI binding when page becomes visible (in case login happened on another tab)
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       ensureAnonUIBindings();
       renderUserBlogsGrid();
+      updateSubscribePageUI();
     }
   });
 });
+
