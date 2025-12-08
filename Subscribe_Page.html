@@ -32,7 +32,19 @@
         <p>Stay connected with our latest reviews, parenting tips, and safety alerts.</p>
       </section>
 
-      <section class="post-box">
+      <!-- LOGGED-IN WELCOME (hidden when not logged in) -->
+      <section id="user-welcome" class="post-box" style="display:none;">
+        <h2 id="welcome-title">Welcome</h2>
+        <p id="welcome-sub">Thanks for being part of Parents Unplugged — use the links below to manage your content.</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;">
+          <a id="go-to-blogs" href="FinalBlog.html" style="text-decoration:none;"><button type="button">Your Blogs</button></a>
+          <a id="go-to-reviews" href="Reviews.html" style="text-decoration:none;"><button type="button">Your Reviews</button></a>
+          <button id="logout-btn" type="button" class="secondary">Log out</button>
+        </div>
+      </section>
+
+      <!-- REGISTRATION (shown when not logged in) -->
+      <section id="registration-section" class="post-box">
         <h2>Join Our Newsletter</h2>
         <form id="registration-form" class="subscribe-form" action="#" method="post" aria-label="Registration form">
           <label for="username" style="display:block">Username</label>
@@ -53,7 +65,8 @@
         </form>
       </section>
 
-      <section class="post-box">
+      <!-- LOGIN (shown when not logged in) -->
+      <section id="login-section" class="post-box">
         <h2>Already Joined? Log In</h2>
         <form id="login-form" class="subscribe-form" action="#" method="post" aria-label="Login form">
           <label for="login-username" style="display:block">Username</label>
@@ -87,6 +100,3 @@
   <script src="script.js"></script>
 </body>
 </html>
-
-
-
