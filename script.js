@@ -1,3 +1,5 @@
+
+
 document.addEventListener("DOMContentLoaded", () => {
   const $ = s => document.querySelector(s);
   const $$ = s => Array.from(document.querySelectorAll(s));
@@ -22,7 +24,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const COMMENTS_KEY = "pu_comments_v1";
   const POLL_KEY = "pu_poll_v1";
   const POLL_VOTES_KEY = "pu_poll_votes_v1";
-  const ANON_NAME_KEY = "pu_anon_name"; // persistent anonymous handle for non-logged-in users
+  const ANON_NAME_KEY = "pu_anon_name"; 
+  const ALIASES_KEY = "pu_aliases_v1"; 
 
   const defaultPoll = {
     question: "What's your biggest parenting challenge this week?",
@@ -49,6 +52,12 @@ document.addEventListener("DOMContentLoaded", () => {
   function setAnonName(name){ localStorage.setItem(ANON_NAME_KEY, name); }
   function clearAnonName(){ localStorage.removeItem(ANON_NAME_KEY); }
 
+  function getAliases(){ try{ return JSON.parse(localStorage.getItem(ALIASES_KEY) || "{}"); } catch { return {}; } }
+  function saveAliases(obj){ localStorage.setItem(ALIASES_KEY, JSON.stringify(obj)); }
+  function getAliasForUser(username){ if (!username) return ""; const a = getAliases(); return a[username] || ""; }
+  function setAliasForUser(username, alias){ if (!username) return; const a = getAliases(); a[username] = alias; saveAliases(a); }
+  function clearAliasForUser(username){ if (!username) return; const a = getAliases(); delete a[username]; saveAliases(a); }
+
   function hasUserVoted(pollId, username){
     if (!username) return false;
     const votes = getPollVotes();
@@ -65,49 +74,211 @@ document.addEventListener("DOMContentLoaded", () => {
   function escapeHtml(s){ if (!s) return ""; return String(s).replace(/[&<>"'`=\/]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'}[c])); }
   function capital(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
 
-  /* ---------------- Anonymous-handle helpers ---------------- */
+  /* ---------------- Alias / anonymous modal wiring ---------------- */
+  const aliasOverlay = $("#alias-modal-overlay");
+  const aliasInput = $("#alias-input");
+  const aliasSaveBtn = $("#alias-save");
+  const aliasCancelBtn = $("#alias-cancel");
+  const aliasError = $("#alias-error");
+
+  
+  function openAliasModal({ forUser=null, isAnon=false, required=false } = {}) {
+    aliasError.textContent = "";
+    aliasInput.value = "";
+    aliasOverlay.style.display = "flex";
+    aliasOverlay.setAttribute("aria-hidden", "false");
+    aliasInput.focus();
+
+    if (forUser) {
+      const existing = getAliasForUser(forUser);
+      if (existing) aliasInput.value = existing;
+    } else if (isAnon) {
+      const existingAnon = getAnonName();
+      if (existingAnon) aliasInput.value = existingAnon;
+    }
+
+    if (required) {
+      aliasCancelBtn.style.display = "none";
+      aliasOverlay.onclick = (e) => {
+        e.stopPropagation();
+      };
+    } else {
+      aliasCancelBtn.style.display = "inline-block";
+      aliasOverlay.onclick = (e) => {
+        if (e.target === aliasOverlay) closeModal();
+      };
+    }
+
+    aliasSaveBtn.disabled = false;
+    aliasSaveBtn.onclick = onSave;
+    aliasCancelBtn.onclick = () => {
+      closeModal();
+    };
+
+    function closeModal(){
+      aliasOverlay.style.display = "none";
+      aliasOverlay.setAttribute("aria-hidden", "true");
+      aliasError.textContent = "";
+      aliasInput.onkeydown = null;
+      aliasSaveBtn.onclick = null;
+      aliasCancelBtn.onclick = null;
+      aliasOverlay.onclick = null;
+    }
+
+    function onSave(){
+      aliasError.textContent = "";
+      const raw = aliasInput.value || "";
+      const name = raw.trim();
+      if (name.length < 3) { aliasError.textContent = "Nickname must be at least 3 characters."; aliasInput.focus(); return; }
+      if (forUser) {
+        if (name === forUser) { aliasError.textContent = "Nickname cannot match your account username. Pick a different alias."; aliasInput.focus(); return; }
+        setAliasForUser(forUser, name);
+      } else {
+        setAnonName(name);
+      }
+      applyAliasToUI();
+      closeModal();
+      setTimeout(()=> alert("Thanks — your nickname has been saved."), 50);
+    }
+
+    // allow Enter to save
+    aliasInput.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); onSave(); } };
+  }
+
+  function showAliasIfNeededOnBlogPage() {
+    if (!window.location.pathname.includes("FinalBlog.html")) return;
+    const reg = getRegisteredUser();
+    if (reg && reg.username) {
+      const alias = getAliasForUser(reg.username);
+      if (!alias) {
+        setTimeout(()=> openAliasModal({ forUser: reg.username, required: false }), 300);
+      } else {
+        applyAliasToUI();
+      }
+      return;
+    }
+    if (!getAnonName()) {
+      setTimeout(()=> openAliasModal({ isAnon:true, required: false }), 300);
+      return;
+    }
+    applyAliasToUI();
+  }
+
+  // Reviews page: require nickname selection 
+  function showAliasRequiredOnReviewsPage() {
+    if (!window.location.pathname.includes("Reviews.html")) return;
+    const reg = getRegisteredUser();
+    if (reg && reg.username) {
+      const alias = getAliasForUser(reg.username);
+      if (!alias) {
+        setTimeout(()=> openAliasModal({ forUser: reg.username, required: true }), 200);
+        return;
+      } else {
+        applyAliasToUI();
+        return;
+      }
+    }
+    // anonymous visitor
+    if (!getAnonName()) {
+      setTimeout(()=> openAliasModal({ isAnon:true, required: true }), 200);
+      return;
+    }
+    applyAliasToUI();
+  }
+
+  /* ---------------- Anonymous-handle helpers (UI) ---------------- */
   function ensureAnonUIBindings(){
-    // Post form anon controls
+    // Post form anon controls (blog)
     const postNameInput = $("#post-name");
     const changeAnonPostBtn = $("#change-anon-post-name");
     if (postNameInput) {
       applyAnonLockToInput(postNameInput, changeAnonPostBtn);
     }
-    // Review form anon controls
+    // Review form anon controls (reviews page)
     const reviewNameInput = $("#review-name");
     const changeAnonReviewBtn = $("#change-anon-review-name");
     if (reviewNameInput) {
       applyAnonLockToInput(reviewNameInput, changeAnonReviewBtn);
+    }
+    // wire change buttons
+    const changeBtnPost = $("#change-anon-post-name");
+    if (changeBtnPost) {
+      changeBtnPost.onclick = () => {
+        const currentUser = getCurrentUser();
+        if (currentUser && currentUser.username) {
+          if (!confirm("Change your blog handle? This will affect future posts. Continue?")) return;
+          openAliasModal({ forUser: currentUser.username, required: false });
+        } else {
+          if (!confirm("Change anonymous handle? This will affect future posts. Continue?")) return;
+          openAliasModal({ isAnon:true, required: false });
+        }
+      };
+    }
+    const changeBtnReview = $("#change-anon-review-name");
+    if (changeBtnReview) {
+      changeBtnReview.onclick = () => {
+        const currentUser = getCurrentUser();
+        if (currentUser && currentUser.username) {
+          if (!confirm("Change your review handle? This will affect future reviews. Continue?")) return;
+          openAliasModal({ forUser: currentUser.username, required: false });
+        } else {
+          if (!confirm("Change anonymous handle? This will affect future reviews. Continue?")) return;
+          openAliasModal({ isAnon:true, required: false });
+        }
+      };
     }
   }
 
   function applyAnonLockToInput(inputEl, changeButtonEl){
     const currentUser = getCurrentUser();
     if (currentUser && currentUser.username) {
-      inputEl.disabled = false;
-      if (changeButtonEl) changeButtonEl.style.display = "none";
-      return;
+      const alias = getAliasForUser(currentUser.username);
+      if (alias) {
+        inputEl.value = alias;
+        inputEl.disabled = true;
+        if (changeButtonEl) { changeButtonEl.style.display = "inline-block"; changeButtonEl.textContent = "Change blog handle"; }
+        return;
+      } else {
+        inputEl.disabled = false;
+        if (changeButtonEl) changeButtonEl.style.display = "none";
+        return;
+      }
     }
     const anon = getAnonName();
     if (anon) {
       inputEl.value = anon;
       inputEl.disabled = true;
-      if (changeButtonEl) {
-        changeButtonEl.style.display = "inline-block";
-        changeButtonEl.onclick = () => {
-          if (!confirm("Change anonymous handle? This will let you pick a new anonymous name (will affect future posts). Continue?")) return;
-          const newName = prompt("Enter your new anonymous name (min 3 chars):", anon) || "";
-          const trimmed = newName.trim();
-          if (trimmed.length < 3) { alert("Name must be at least 3 characters."); return; }
-          setAnonName(trimmed);
-          inputEl.value = trimmed;
-          inputEl.disabled = true;
-          renderAllPosts(); renderReviews();
-        };
-      }
+      if (changeButtonEl) { changeButtonEl.style.display = "inline-block"; changeButtonEl.textContent = "Change anonymous name"; }
     } else {
+      inputEl.value = "";
       inputEl.disabled = false;
       if (changeButtonEl) changeButtonEl.style.display = "none";
+    }
+  }
+
+  function applyAliasToUI(){
+    // set post-name and review-name inputs appropriately
+    const postNameInput = $("#post-name");
+    const reviewNameInput = $("#review-name");
+    const current = getCurrentUser();
+    if (current && current.username) {
+      const alias = getAliasForUser(current.username);
+      if (alias) {
+        if (postNameInput) { postNameInput.value = alias; postNameInput.disabled = true; $("#change-anon-post-name").style.display = "inline-block"; $("#change-anon-post-name").textContent = "Change blog handle"; }
+        if (reviewNameInput) { reviewNameInput.value = alias; reviewNameInput.disabled = true; $("#change-anon-review-name").style.display = "inline-block"; $("#change-anon-review-name").textContent = "Change blog handle"; }
+      } else {
+        if (postNameInput) { postNameInput.disabled = false; $("#change-anon-post-name").style.display = "none"; }
+        if (reviewNameInput) { reviewNameInput.disabled = false; $("#change-anon-review-name").style.display = "none"; }
+      }
+    } else {
+      const anon = getAnonName();
+      if (anon) {
+        if (postNameInput) { postNameInput.value = anon; postNameInput.disabled = true; $("#change-anon-post-name").style.display = "inline-block"; $("#change-anon-post-name").textContent = "Change anonymous name"; }
+        if (reviewNameInput) { reviewNameInput.value = anon; reviewNameInput.disabled = true; $("#change-anon-review-name").style.display = "inline-block"; $("#change-anon-review-name").textContent = "Change anonymous name"; }
+      } else {
+        if (postNameInput) { postNameInput.value = ""; postNameInput.disabled = false; $("#change-anon-post-name").style.display = "none"; }
+        if (reviewNameInput) { reviewNameInput.value = ""; reviewNameInput.disabled = false; $("#change-anon-review-name").style.display = "none"; }
+      }
     }
   }
 
@@ -287,15 +458,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const posts = getPosts();
     const reg = getRegisteredUser();
     const current = getCurrentUser();
-    if (!reg && !getAnonName()){ 
-      grid.innerHTML = `<div class="blog-post" style="text-align:center;padding:18px"><div style="font-weight:600">Your blogs</div><p style="color:#555">Your posts (when you create them) will appear here. Sign in or choose an anonymous name to get started.</p></div>`; 
-      return; 
+    if (!reg && !getAnonName()){
+      grid.innerHTML = `<div class="blog-post" style="text-align:center;padding:18px"><div style="font-weight:600">Your blogs</div><p style="color:#555">Your posts (when you create them) will appear here. Sign in or choose an anonymous name to get started.</p></div>`;
+      return;
     }
-    const ownerName = reg ? reg.username : getAnonName();
+    const ownerName = reg ? (getAliasForUser(reg.username) || reg.username) : getAnonName();
     const mine = posts.filter(p => p.name === ownerName);
-    if (mine.length === 0){ 
-      grid.innerHTML = `<div class="blog-post" style="text-align:center;padding:18px"><div style="font-weight:600">You haven't posted yet</div><p style="color:#555">Write your first story!</p><div><a href="FinalBlog.html"><button>Write a Story</button></a></div></div>`; 
-      return; 
+    if (mine.length === 0){
+      grid.innerHTML = `<div class="blog-post" style="text-align:center;padding:18px"><div style="font-weight:600">You haven't posted yet</div><p style="color:#555">Write your first story!</p><div><a href="FinalBlog.html"><button>Write a Story</button></a></div></div>`;
+      return;
     }
 
     const comments = getAllComments();
@@ -591,7 +762,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (delBtn) delBtn.addEventListener("click", ()=> deleteReview(id));
   }
 
-  /* ---------------- Posting forms (feed + reviews) with anon persistence ---------------- */
+  /* ---------------- Posting forms (feed + reviews) with alias/anon persistence ---------------- */
   const postForm = $("#post-form");
   if (postForm){
     postForm.addEventListener("submit", e=>{
@@ -600,9 +771,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const regUser = getRegisteredUser();
       const current = getCurrentUser();
 
-      let nameToUse = regUser ? regUser.username : "";
+      let nameToUse = "";
 
-      if (!nameToUse) {
+      if (regUser && regUser.username) {
+        const alias = getAliasForUser(regUser.username);
+        if (!alias) {
+          alert("Please choose a blog nickname (distinct from your account username) before posting.");
+          openAliasModal({ forUser: regUser.username, required: false });
+          return;
+        }
+        nameToUse = alias;
+      } else {
         if (!getAnonName()) {
           const ok = ensureAnonExistsOrPrompt("posting");
           if (!ok) return;
@@ -619,7 +798,7 @@ document.addEventListener("DOMContentLoaded", () => {
         posts.unshift({ id:newId, name: nameToUse || "Anonymous", text, imageDataUrl: dataUrl||"", time: new Date().toISOString() });
         savePosts(posts);
         postForm.reset();
-        ensureAnonUIBindings();
+        applyAliasToUI();
         window.location.href = `post.html?id=${newId}`;
       };
       if (fileInput && fileInput.files && fileInput.files[0]){
@@ -637,11 +816,22 @@ document.addEventListener("DOMContentLoaded", () => {
       const providedNameInput = reviewForm.querySelector("#review-name");
       const regUser = getRegisteredUser();
 
-      let nameToUse = regUser ? regUser.username : "";
-      if (!nameToUse) {
+      let nameToUse = "";
+      if (regUser && regUser.username) {
+        const alias = getAliasForUser(regUser.username);
+        if (!alias) {
+          // On Reviews page alias is REQUIRED => open required modal
+          alert("You must choose a review nickname (distinct from your account username) before posting reviews.");
+          openAliasModal({ forUser: regUser.username, required: true });
+          return;
+        }
+        nameToUse = alias;
+      } else {
         if (!getAnonName()) {
-          const ok = ensureAnonExistsOrPrompt("reviewing");
-          if (!ok) return;
+          // On Reviews page alias is REQUIRED => open required modal
+          alert("You must choose an anonymous nickname before posting reviews.");
+          openAliasModal({ isAnon:true, required: true });
+          return;
         }
         nameToUse = getAnonName() || (providedNameInput?.value?.trim() || "Anonymous");
       }
@@ -655,7 +845,7 @@ document.addEventListener("DOMContentLoaded", () => {
         reviews.unshift({ id:newId, name: nameToUse || "Anonymous", text, imageDataUrl: dataUrl||"", time: new Date().toISOString() });
         saveReviews(reviews);
         reviewForm.reset();
-        ensureAnonUIBindings();
+        applyAliasToUI();
         document.querySelector('.reviews-grid')?.scrollIntoView({behavior:'smooth'});
       };
       if (fileInput && fileInput.files && fileInput.files[0]){
@@ -684,7 +874,6 @@ document.addEventListener("DOMContentLoaded", () => {
       localStorage.setItem("pu_registered_user", JSON.stringify({ username: uname, email }));
       localStorage.setItem("pu_current_user", JSON.stringify({ username: uname }));
       alert("Registered — thanks! Redirecting to Blogs.");
-      updateSubscribePageUI();
       window.location.href = "FinalBlog.html";
     });
   }
@@ -700,12 +889,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (ok) {
         localStorage.setItem("pu_current_user", JSON.stringify({ username: entered }));
         alert("Login successful");
-        updateSubscribePageUI();
         if (window.location.pathname.includes("Subscribe_Page.html")) {
-          // keep user on subscribe page and update UI
           updateSubscribePageUI();
         } else {
-          // default redirect
           window.location.href = "FinalBlog.html";
         }
       } else alert("Invalid username or password.");
@@ -715,7 +901,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function getCurrentUser(){ try{ return JSON.parse(localStorage.getItem("pu_current_user") || "null"); }catch{return null;} }
   function getRegisteredUser(){ try{ return JSON.parse(localStorage.getItem("pu_registered_user")||"null"); }catch{return null;} }
 
-  /* ---------------- Subscribe page UI update ---------------- */
+  /* ---------------- Subscribe page UI update (unchanged behavior) ---------------- */
   function updateSubscribePageUI(){
     const current = getCurrentUser();
     const welcomeSection = $("#user-welcome");
@@ -723,7 +909,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const loginSection = $("#login-section");
 
     if (current && current.username) {
-      // show welcome, hide register/login
       if (welcomeSection) {
         $("#welcome-title").textContent = `Welcome, ${current.username}`;
         $("#welcome-sub").textContent = `Thanks for being part of Parents Unplugged — use the links below to manage your content.`;
@@ -732,32 +917,32 @@ document.addEventListener("DOMContentLoaded", () => {
       if (regSection) regSection.style.display = "none";
       if (loginSection) loginSection.style.display = "none";
 
-      // Wire logout
       const logoutBtn = $("#logout-btn");
       if (logoutBtn) {
         logoutBtn.onclick = () => {
           if (!confirm("Log out?")) return;
           localStorage.removeItem("pu_current_user");
           updateSubscribePageUI();
-          // After logging out, show registration/login again
         };
       }
 
-      // Ensure the quick links point to the right pages (they already do)
       const goBlogs = $("#go-to-blogs");
       if (goBlogs) goBlogs.href = "FinalBlog.html";
       const goReviews = $("#go-to-reviews");
       if (goReviews) goReviews.href = "Reviews.html";
     } else {
-      // not logged in: show register/login, hide welcome
       if (welcomeSection) welcomeSection.style.display = "none";
       if (regSection) regSection.style.display = "block";
       if (loginSection) loginSection.style.display = "block";
     }
   }
 
-  /* ---------------- init render ---------------- */
   ensureAnonUIBindings();
+  applyAliasToUI();
+
+  showAliasIfNeededOnBlogPage();
+  showAliasRequiredOnReviewsPage();
+
   renderPoll();
   renderAllPosts();
   renderReviews();
@@ -765,12 +950,13 @@ document.addEventListener("DOMContentLoaded", () => {
   renderSingleReview();
   updateSubscribePageUI();
 
-  // Re-apply subscribe UI binding when page becomes visible (in case login happened on another tab)
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       ensureAnonUIBindings();
       renderUserBlogsGrid();
       updateSubscribePageUI();
+      showAliasIfNeededOnBlogPage();
+      showAliasRequiredOnReviewsPage();
     }
   });
 });
